@@ -1,0 +1,21 @@
+# Ink CLI tools (managed by installer)
+bin/
+# Ink backward-compat symlink (managed by installer)
+.shared/
+# Serena MCP files (auto-generated)
+.serena/
+# RTK per-project binary (managed by installer)
+.rtk/
+# Ink project instructions (managed by installer)
+CLAUDE.md
+# Ink MCP configuration (managed by installer)
+.mcp.json
+# Ink version marker (local per-machine, do not commit)
+.claude/INK_VERSION
+# Ink planning files (set features.commit_docs=true to commit)
+.planning/
+
+.claude/
+
+# Environment variables — never commit secrets
+.env

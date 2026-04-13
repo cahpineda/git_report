@@ -1,0 +1,9 @@
+{
+  "name": "github-activity-report",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node report.js",
+    "test": "node --test src/*.test.js"
+  }
+}
