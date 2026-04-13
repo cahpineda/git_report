@@ -216,29 +216,68 @@ export async function listAllRepoCommits(org, repo, since, until) {
 
 /**
  * Fetch stats (additions/deletions) for a single commit.
- * Checks rate limit after the request and sleeps if needed.
+ * Retries up to MAX_STATS_RETRIES times when GitHub returns zero stats,
+ * because GitHub computes stats lazily and may not have them ready immediately.
+ * Checks rate limit after each request and sleeps if needed.
  *
  * @param {string} org
  * @param {string} repo
  * @param {string} sha
- * @returns {Promise<{ sha: string, additions: number, deletions: number }>}
+ * @returns {Promise<{ sha: string, additions: number, deletions: number, statsReliable: boolean }>}
  */
+const MAX_STATS_RETRIES = 3;
+const STATS_RETRY_DELAY_MS = 2000;
+
 export async function getCommitStats(org, repo, sha) {
-  const { data, headers } = await githubRequest(`/repos/${org}/${repo}/commits/${sha}`);
-  await checkRateLimit(headers);
-  return {
-    sha,
-    additions: data.stats?.additions ?? 0,
-    deletions: data.stats?.deletions ?? 0,
-  };
+  let additions = 0;
+  let deletions = 0;
+  let statsReliable = false;
+
+  for (let attempt = 1; attempt <= MAX_STATS_RETRIES; attempt++) {
+    const { data, headers } = await githubRequest(`/repos/${org}/${repo}/commits/${sha}`);
+    await checkRateLimit(headers);
+
+    additions = data.stats?.additions ?? 0;
+    deletions = data.stats?.deletions ?? 0;
+
+    if (additions > 0 || deletions > 0) {
+      statsReliable = true;
+      break;
+    }
+
+    // Check if this is a known zero-change commit (e.g. empty merge, binary-only)
+    // by looking at the files list. If files exist but all have 0 changes, it's real.
+    const files = data.files ?? [];
+    const hasFiles = files.length > 0;
+    const allFilesZero = hasFiles && files.every((f) => (f.additions ?? 0) === 0 && (f.deletions ?? 0) === 0);
+
+    if (allFilesZero) {
+      // Genuinely zero-change commit (e.g. binary files, submodule pointer)
+      statsReliable = true;
+      break;
+    }
+
+    if (attempt < MAX_STATS_RETRIES) {
+      process.stderr.write(
+        `  [WARN] Zero stats for ${sha.slice(0, 7)} in ${org}/${repo} (attempt ${attempt}/${MAX_STATS_RETRIES}), retrying in ${STATS_RETRY_DELAY_MS / 1000}s...\n`
+      );
+      await sleepMs(STATS_RETRY_DELAY_MS);
+    } else {
+      process.stderr.write(
+        `  [WARN] Zero stats for ${sha.slice(0, 7)} in ${org}/${repo} after ${MAX_STATS_RETRIES} attempts — stats may be incomplete.\n`
+      );
+    }
+  }
+
+  return { sha, additions, deletions, statsReliable };
 }
 
 /**
  * Aggregate per-commit stats into a per-developer Map.
  *
  * @param {Array} commits - Output from listRepoCommits
- * @param {Array<{ sha: string, additions: number, deletions: number }>} statsList
- * @returns {Map<string, { name: string, email: string, commits: number, additions: number, deletions: number }>}
+ * @param {Array<{ sha: string, additions: number, deletions: number, statsReliable: boolean }>} statsList
+ * @returns {Map<string, { name: string, email: string, commits: number, additions: number, deletions: number, unreliableCommits: string[] }>}
  */
 export function aggregateStats(commits, statsList) {
   const result = new Map();
@@ -257,6 +296,7 @@ export function aggregateStats(commits, statsList) {
         commits: 0,
         additions: 0,
         deletions: 0,
+        unreliableCommits: [],
       });
     }
 
@@ -264,6 +304,10 @@ export function aggregateStats(commits, statsList) {
     entry.commits += 1;
     entry.additions += stats.additions;
     entry.deletions += stats.deletions;
+    // Only flag as unreliable when explicitly false (not undefined/missing)
+    if (stats.statsReliable === false) {
+      entry.unreliableCommits.push(stats.sha);
+    }
     // Update name/email to last-seen (fine for display)
     entry.name = commit.author.name;
     entry.email = commit.author.email;
