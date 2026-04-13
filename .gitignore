@@ -19,3 +19,6 @@ CLAUDE.md
 
 # Environment variables — never commit secrets
 .env
+
+# Generated reports
+reports/

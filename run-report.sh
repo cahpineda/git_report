@@ -4,7 +4,10 @@
 
 set -euo pipefail
 
-FILENAME="report-$(date +%Y-%m-%d-%H-%M).md"
+OUTPUT_DIR="reports"
+mkdir -p "${OUTPUT_DIR}"
+
+FILENAME="${OUTPUT_DIR}/report-$(date +%Y-%m-%d-%H-%M).md"
 
 echo "Generating report → ${FILENAME}" >&2
 
