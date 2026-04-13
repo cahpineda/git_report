@@ -7,10 +7,10 @@ set -euo pipefail
 OUTPUT_DIR="reports"
 mkdir -p "${OUTPUT_DIR}"
 
-FILENAME="${OUTPUT_DIR}/report-$(date +%Y-%m-%d-%H-%M).md"
+FILENAME="${OUTPUT_DIR}/report-$(date +%Y-%m-%d).md"
 
 echo "Generating report → ${FILENAME}" >&2
 
-node report.js > "${FILENAME}"
+node report.js "${FILENAME}"
 
 echo "Done. Report saved to: ${FILENAME}" >&2
