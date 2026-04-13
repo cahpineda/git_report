@@ -60,12 +60,12 @@ describe('parseLinkHeader', () => {
 // ---------------------------------------------------------------------------
 
 describe('githubRequest', () => {
-  it('throws synchronously when GITHUB_TOKEN is not set', () => {
+  it('rejects with GITHUB_TOKEN error when token is not set', async () => {
     const saved = process.env.GITHUB_TOKEN;
     delete process.env.GITHUB_TOKEN;
 
     try {
-      assert.throws(
+      await assert.rejects(
         () => githubRequest('/orgs/foo/repos'),
         (err) => {
           assert.ok(
@@ -76,7 +76,6 @@ describe('githubRequest', () => {
         }
       );
     } finally {
-      // Always restore the env var
       if (saved !== undefined) {
         process.env.GITHUB_TOKEN = saved;
       }
